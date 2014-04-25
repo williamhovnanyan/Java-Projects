@@ -4,6 +4,9 @@
 	<classpathentry kind="lib" path="/Users/monitis/Downloads/java2/lib/mongo-2.10.1.jar"/>
 	<classpathentry kind="lib" path="/Users/monitis/solr-4.6.1/example/lib/ext/log4j-1.2.16.jar"/>
 	<classpathentry kind="lib" path="/Users/monitis/mongoOplog/mongoOplog/lib/commons-configuration-1.6.jar"/>
+	<classpathentry kind="lib" path="/Users/monitis/mongoOplog/mongoOplog/lib/commons-lang-2.6.jar"/>
+	<classpathentry kind="lib" path="/Users/monitis/mongoOplog/mongoOplog/lib/commons-logging-1.1.1.jar"/>
+	<classpathentry kind="lib" path="/Users/monitis/Downloads/commons-collections-3.2.1.jar"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
 	<classpathentry kind="lib" path="/Users/monitis/Downloads/neo4j-community-2.0.2/lib/server-api-2.0.2.jar"/>
 	<classpathentry kind="lib" path="/Users/monitis/Downloads/neo4j-community-2.0.2/lib/neo4j-shell-2.0.2.jar"/>

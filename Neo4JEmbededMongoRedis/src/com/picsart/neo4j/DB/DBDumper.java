@@ -49,7 +49,9 @@ public class DBDumper {
 		userreindex = configs.getBoolean("userreindex", false);
 		String mongoHost = configs.getString("mongo-host1", "127.0.0.1");
 		int mongoPort = configs.getInt("mongo-port1", 27017);
+		String log4jprop = configs.getString("log4j", "log4j.properties");
 		
+		PropertyConfigurator.configure(log4jprop);
 		
 		if(userreindex) {
 			MongoContentDumper dbdumper = new MongoContentDumper(mongoHost, mongoPort, graphDb);
