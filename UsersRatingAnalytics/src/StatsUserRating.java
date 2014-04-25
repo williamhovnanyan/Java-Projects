@@ -503,8 +503,10 @@ public class StatsUserRating {
 		public void map(ImmutableBytesWritable row, Result columns, Context context) throws IOException, InterruptedException {
 			try {
 				int summary = 0;
-				for (Cell cell : columns.rawCells()) {
-					summary += Bytes.toInt(cell.getValue());
+				for (Cell cell : columns.rawCells()) { 
+					if(!Bytes.toString(cell.getQualifier()).contains("_count") && 
+							!Bytes.toString(cell.getQualifier()).equals("username"))
+						summary += Bytes.toInt(cell.getValue());
 				}
 				
 				byte[] rowkey = row.get().clone();
@@ -658,9 +660,9 @@ public class StatsUserRating {
 				writer.append('\n');
 				count++;
 				if(count%2000==0)
-					System.out.print("Rows inserted : "+count);
+					System.out.println("Rows inserted : "+count);
 			}
-			System.out.println("Rows inserted : "+count);
+			System.out.println("Rows inserted : " + count);
 			writer.flush();
 			writer.close();
 			userrating.close();
