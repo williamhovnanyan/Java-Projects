@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="src"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.6"/>
+	<classpathentry kind="lib" path="/Users/monitis/Downloads/hbase-server-0.95.2-cdh5.0.0-beta-1.jar"/>
+	<classpathentry kind="lib" path="/Users/monitis/mongoOplog/mongoOplog/lib/htrace-zipkin-2.03.jar"/>
+	<classpathentry kind="lib" path="/Users/monitis/mongoOplog/mongoOplog/lib/htrace-core-2.03.jar"/>
+	<classpathentry kind="lib" path="/Users/monitis/mongoOplog/mongoOplog/lib/zookeeper-3.4.5-cdh5.0.0-beta-1.jar"/>
+	<classpathentry kind="lib" path="/Users/monitis/mongoOplog/mongoOplog/lib/com.google.guava_1.6.0.jar"/>
+	<classpathentry kind="lib" path="/Users/monitis/mongoOplog/mongoOplog/lib/hadoop-common-2.2.0-cdh5.0.0-beta-1.jar"/>
+	<classpathentry kind="lib" path="/Users/monitis/mongoOplog/mongoOplog/lib/hbase-common-0.95.2-cdh5.0.0-beta-1.jar"/>
+	<classpathentry kind="lib" path="/Users/monitis/mongoOplog/mongoOplog/lib/slf4j-log4j12-1.6.1.jar"/>
+	<classpathentry kind="lib" path="/Users/monitis/mongoOplog/mongoOplog/lib/slf4j-api-1.6.4.jar"/>
+	<classpathentry kind="lib" path="/Users/monitis/mongoOplog/mongoOplog/lib/log4j-1.2.17.jar"/>
+	<classpathentry kind="lib" path="/Users/monitis/mongoOplog/mongoOplog/lib/commons-lang-2.6.jar"/>
+	<classpathentry kind="lib" path="/Users/monitis/mongoOplog/mongoOplog/lib/hadoop-core-2.2.0-mr1-cdh5.0.0-beta-1.jar"/>
+	<classpathentry kind="lib" path="/Users/monitis/mongoOplog/mongoOplog/lib/hbase-client-0.95.2-cdh5.0.0-beta-1.jar"/>
+	<classpathentry kind="lib" path="/Users/monitis/mongoOplog/mongoOplog/lib/mongo-2.10.1.jar"/>
+	<classpathentry kind="lib" path="/Users/monitis/mongoOplog/mongoOplog/lib/commons-logging-1.1.1.jar"/>
+	<classpathentry kind="lib" path="/Users/monitis/mongoOplog/mongoOplog/lib/commons-configuration-1.6.jar"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>
