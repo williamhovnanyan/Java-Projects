@@ -592,20 +592,27 @@ public class StatsUserRating {
 			Configuration conf = HBaseConfiguration.create();
 			HTable userrating = new HTable(conf, "userrating");
 						
-			FileWriter writer = new FileWriter("/root/Statistics/UsersRatingAnalytics/stats.csv");
+			FileWriter writerarr[] = {
+					new FileWriter("/root/Statistics/UsersRatingAnalytics/stats_positive.csv"),
+					new FileWriter("/root/Statistics/UsersRatingAnalytics/stats_zero.csv"),
+					new FileWriter("/root/Statistics/UsersRatingAnalytics/stats_negative.csv")
+			};
 			
-			writer.append("username");
-			writer.append(',');
-			writer.append("apps_count");
-			writer.append(',');
-			writer.append("followers_count");
-			writer.append(',');
-			writer.append("following_count");
-			writer.append(',');
-			writer.append("photos_count");
-			writer.append(',');
-			writer.append("rating");
-			writer.append('\n');
+			for (int i = 0; i < writerarr.length; i++) {
+				writerarr[i].append("username");
+				writerarr[i].append(',');
+				writerarr[i].append("apps_count");
+				writerarr[i].append(',');
+				writerarr[i].append("followers_count");
+				writerarr[i].append(',');
+				writerarr[i].append("following_count");
+				writerarr[i].append(',');
+				writerarr[i].append("photos_count");
+				writerarr[i].append(',');
+				writerarr[i].append("rating");
+				writerarr[i].append('\n');
+			}
+			
 			
 			Scan scan = new Scan();
 			scan.setCaching(1000);
@@ -615,47 +622,55 @@ public class StatsUserRating {
 			scan.addColumn(Bytes.toBytes("s"), Bytes.toBytes("following_count"));
 			scan.addColumn(Bytes.toBytes("s"), Bytes.toBytes("apps_count"));
 			scan.addColumn(Bytes.toBytes("s"), Bytes.toBytes("photos_count"));
-			scan.addColumn(Bytes.toBytes("s"), Bytes.toBytes("rating"));
+			scan.addColumn(Bytes.toBytes("s"), Bytes.toBytes("summary"));
 			
 			ResultScanner scanner = userrating.getScanner(scan);
 			int count = 0;
+			FileWriter writer = null;
 			for (Result result : scanner) {
+				int summary = 0;
+				if(result.containsColumn(Bytes.toBytes("s"), Bytes.toBytes("summary")))
+					summary = Bytes.toInt(result.getValue(Bytes.toBytes("s"), Bytes.toBytes("summary")));
+				
+				if(summary > 0) 
+					writer = writerarr[0];
+				else if(summary == 0)
+					writer = writerarr[1];
+				else 
+					writer = writerarr[2];
+					
 				
 				if(result.containsColumn(Bytes.toBytes("s"), Bytes.toBytes("username")))
 					writer.append(new String(result.getValue(Bytes.toBytes("s"), Bytes.toBytes("username")), "UTF-8"));
 				else 
-					writer.append("");
+					continue;
 				writer.append(',');
 				
 				if(result.containsColumn(Bytes.toBytes("s"), Bytes.toBytes("apps_count")))
 					writer.append(String.valueOf(Bytes.toInt(result.getValue(Bytes.toBytes("s"), Bytes.toBytes("apps_count")))));
 				else 
-					writer.append("");
+					writer.append('0');
 				writer.append(',');
 				
 				if(result.containsColumn(Bytes.toBytes("s"), Bytes.toBytes("followers_count")))
 					writer.append(String.valueOf(Bytes.toInt(result.getValue(Bytes.toBytes("s"), Bytes.toBytes("followers_count")))));
 				else 
-					writer.append("");
+					writer.append('0');
 				writer.append(',');
 				
 				if(result.containsColumn(Bytes.toBytes("s"), Bytes.toBytes("following_count")))
 					writer.append(String.valueOf(Bytes.toInt(result.getValue(Bytes.toBytes("s"), Bytes.toBytes("following_count")))));
 				else 
-					writer.append("");
+					writer.append('0');
 				writer.append(',');
 				
 				if(result.containsColumn(Bytes.toBytes("s"), Bytes.toBytes("photos_count")))
 					writer.append(String.valueOf(Bytes.toInt(result.getValue(Bytes.toBytes("s"), Bytes.toBytes("photos_count")))));
 				else 
-					writer.append("");
-				writer.append(',');
-				
-				if(result.containsColumn(Bytes.toBytes("s"), Bytes.toBytes("summary")))
-					writer.append(String.valueOf(Bytes.toInt(result.getValue(Bytes.toBytes("s"), Bytes.toBytes("summary")))));
-				else 
-					writer.append("");
-				writer.append(',');
+					writer.append('0');
+				writer.append(',');					
+					
+				writer.append(String.valueOf(summary));				
 				
 				writer.append('\n');
 				count++;
@@ -663,8 +678,11 @@ public class StatsUserRating {
 					System.out.println("Rows inserted : "+count);
 			}
 			System.out.println("Rows inserted : " + count);
-			writer.flush();
-			writer.close();
+			
+			for (int i = 0; i < writerarr.length; i++) {
+				writerarr[i].flush();
+				writerarr[i].close();
+			}
 			userrating.close();
 			
 		} catch(Exception e) {
