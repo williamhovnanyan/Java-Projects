@@ -1,3 +1,4 @@
+import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.text.DateFormat;
@@ -58,8 +59,9 @@ public class StatsUserRating {
 	}
 	
 	private enum UserCounters { CONNECTION, APPS, FOLLOWERS, FOLLOWING, BLOCKS, MAP_FAILED, REDUCE_FAILED, PHOTOS_COUNT }
-	private enum PhotosCounters {  PUBLIC, RECENT, FEATURED, MAP_FAILED, REDUCE_FAILED }
+	private enum PhotosCounters {  BLACKLISTED, PUBLIC, RECENT, FEATURED, MAP_FAILED, REDUCE_FAILED }
 	private enum SummaryCounters { MIN_RATING, MAX_RATING, MAP_FAILED, REDUCE_FAILED }
+	private static String[] blackListedWords = new String[] {"kik", "instagram"};
 	
 	private static Configuration conf;
 	private static final Logger LOG = Logger.getLogger(StatsUserRating.class);
@@ -92,7 +94,7 @@ public class StatsUserRating {
       	userscan.addColumn(Bytes.toBytes("i"), Bytes.toBytes("blocks"));
     	userscan.addColumn(Bytes.toBytes("i"), Bytes.toBytes("username"));
     	userscan.addColumn(Bytes.toBytes("i"), Bytes.toBytes("photos_count"));
-    	    	
+    	userscan.addColumn(Bytes.toBytes("i"), Bytes.toBytes("created"));    	
       	      	
     	userscan.setCaching(1000);
     	userscan.setCacheBlocks(false);
@@ -115,7 +117,8 @@ public class StatsUserRating {
       	photoscan.addColumn(Bytes.toBytes("i"), Bytes.toBytes("recent"));
       	photoscan.addColumn(Bytes.toBytes("i"), Bytes.toBytes("featured"));
 //     	photoscan.addColumn(Bytes.toBytes("i"), Bytes.toBytes("metadata"));
-//     	photoscan.addColumn(Bytes.toBytes("i"), Bytes.toBytes("comments"));
+     	photoscan.addColumn(Bytes.toBytes("i"), Bytes.toBytes("comments"));
+     	photoscan.addColumn(Bytes.toBytes("i"), Bytes.toBytes("title"));
       	photoscan.addColumn(Bytes.toBytes("i"), Bytes.toBytes("user"));
       	
     	photoscan.setCaching(1000);
@@ -159,8 +162,6 @@ public class StatsUserRating {
     	
     	long endTime = new Date().getTime();
     	
-    	System.out.println("Min rating is " + job.getCounters().findCounter(SummaryCounters.MIN_RATING).getValue());
-    	System.out.println("Max rating is " + job.getCounters().findCounter(SummaryCounters.MAX_RATING).getValue());
     	System.out.println("Job StatsPhoto completed in " + (endTime-startTime)/1000 + " seconds!");
     	
     	try {
@@ -203,7 +204,7 @@ public class StatsUserRating {
 	}
     
   	static class ParseMapper1 extends TableMapper<ImmutableBytesWritable, Writable> {
-
+  		private static DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
   		private static final Log MapLOGGER = LogFactory.getLog(ParseMapper1.class);
   		private static IntWritable ONE = new IntWritable(1);
   		private static Map<String, Result> APPS = new HashMap<String, Result>(50);
@@ -238,11 +239,24 @@ public class StatsUserRating {
 		public void map(ImmutableBytesWritable row, Result columns, Context context) throws IOException, InterruptedException {
 			try {
 				BasicDBList connections, apps, blocks;
+				Date date;
 				int followers_count = 0, following_count = 0, photo_count = 0;
 				
 				byte[] rowkey = row.get().clone();
 				ReverseRowKey(rowkey);
 				String _id = new ObjectId(rowkey).toString();
+				
+				try {
+					date =  dateFormat.parse(
+							Bytes.toString(columns.getValue(Bytes.toBytes("i"), Bytes.toBytes("created"))));
+					
+					if(date!=null)
+						context.write(new ImmutableBytesWritable(Bytes.toBytes(_id + "|:|" + "created" + "|:|" + date.toString())), 
+								ONE);
+				} catch(Exception e) {
+					MapLOGGER.error("Connection handling exception _id = " + _id, e);
+					context.getCounter(UserCounters.CONNECTION).increment(1);
+				}
 				
 				try {
 					connections = (BasicDBList) JSON.parse(
@@ -285,6 +299,9 @@ public class StatsUserRating {
 							new IntWritable(paidcount));
 					context.write(new ImmutableBytesWritable(Bytes.toBytes(_id + ":" + "apps_count")), 
 							new IntWritable(paidcount));
+					context.write(new ImmutableBytesWritable(Bytes.toBytes(_id + ":" + "total_apps_count")), 
+							new IntWritable(apps.size()));
+					
 				} catch(Exception e) {
 					MapLOGGER.error("Apps handling exception _id = " + _id, e);
 					context.getCounter(UserCounters.APPS).increment(1);
@@ -367,7 +384,7 @@ public class StatsUserRating {
     		try {
 	    		String[] keys = Bytes.toString(key.get()).split(":");
 	    		
-	    		if(!keys[1].equals("username")) {
+	    		if(!keys[1].equals("username") && !keys[1].equals("created")) {
 		    		double rating = context.getConfiguration().getDouble(keys[1], 1);
 		    		
 		    		Integer count = 0;
@@ -383,7 +400,8 @@ public class StatsUserRating {
 					put.add(Bytes.toBytes("s"), Bytes.toBytes(keys[1]), Bytes.toBytes((int)Math.ceil( count.intValue() * rating)));
 					
 					context.write(new ImmutableBytesWritable(rowkey), put);
-	    		} else {
+	    		} else if(!keys[1].equals("created")) {
+	    			
 	    			byte[] rowkey = new ObjectId(keys[0]).toByteArray();
 					ReverseRowKey(rowkey);
 					
@@ -391,7 +409,17 @@ public class StatsUserRating {
 					put.add(Bytes.toBytes("s"), Bytes.toBytes(keys[1]), Bytes.toBytes(keys[2]));
 					
 					context.write(new ImmutableBytesWritable(rowkey), put);
-	    		}
+	    		} else {
+	    			String[] createdkeys = Bytes.toString(key.get()).split("\\|:\\|");
+	    			byte[] rowkey = new ObjectId(createdkeys[0]).toByteArray();
+					ReverseRowKey(rowkey);
+					
+					Put put = new Put(rowkey);
+					put.add(Bytes.toBytes("s"), Bytes.toBytes(createdkeys[1]), Bytes.toBytes(createdkeys[2]));
+					
+					context.write(new ImmutableBytesWritable(rowkey), put);
+	    		}	    			
+	    		
     		} catch(Exception e) {
     			ReduceLOGGER.error("Error in counting users information", e);
     			context.getCounter(UserCounters.REDUCE_FAILED).increment(1);
@@ -413,7 +441,39 @@ public class StatsUserRating {
 						columns.getValue(Bytes.toBytes("i"), Bytes.toBytes("user")));		
 				byte[] rowkey = row.get().clone();
 				ReverseRowKey(rowkey);
-				_id = _id + ":" + new ObjectId(rowkey).toString();
+								
+				try {
+					BasicDBList comments = (BasicDBList) JSON.parse(new String(columns.getValue(Bytes.toBytes("i"), Bytes.toBytes("comments")), "UTF-8"));
+					String title = new String(columns.getValue(Bytes.toBytes("i"), Bytes.toBytes("title")), "UTF-8");
+					
+					int title_count = 0;
+					for (String word : title.split(" ")) {
+						for (String badString : blackListedWords) {
+							if(word.equals(badString))
+								title_count++;
+						}
+					}
+					context.write(new ImmutableBytesWritable(Bytes.toBytes(_id + ":" + "blacklisted_keyword_comments_or_descriptions")), 
+							new IntWritable(title_count));
+					
+					for (Object object : comments) {
+						String[] words = ((BasicDBObject)object).getString("text").split(" ");
+						int commentcount = 0;			
+						for (String word : words) {
+							for (String badword : blackListedWords) {
+								if(badword.equals(word))
+									commentcount++;
+							}
+						}
+						String users_objId = ((BasicDBObject)object).getString("user");
+						
+						context.write(new ImmutableBytesWritable(Bytes.toBytes(users_objId + ":" + "blacklisted_keyword_comments_or_descriptions")), 
+								new IntWritable(commentcount));
+					}															
+				} catch(Exception e) {
+					MapLOGGER.error("BlackListed handling exception", e);
+					context.getCounter(PhotosCounters.BLACKLISTED).increment(1);
+				}
 				
 				try {
 					pub = Bytes.toBoolean(columns.getValue(Bytes.toBytes("i"), Bytes.toBytes("public")));
@@ -456,7 +516,7 @@ public class StatsUserRating {
     		String[] keys = null;
     		try {
 	    		keys = Bytes.toString(key.get()).split(":");
-	    		double rating = context.getConfiguration().getDouble(keys[2], 0);
+	    		double rating = context.getConfiguration().getDouble(keys[1], 0);
 	    		
 	    		Integer count = 0;
 				Iterator<IntWritable> it = values.iterator();
@@ -468,11 +528,11 @@ public class StatsUserRating {
 				ReverseRowKey(rowkey);
 				
 				Put put = new Put(rowkey);
-				put.add(Bytes.toBytes("s"), Bytes.toBytes(keys[2]), Bytes.toBytes((int)Math.ceil(count.intValue() * rating)));
+				put.add(Bytes.toBytes("s"), Bytes.toBytes(keys[1]), Bytes.toBytes((int)Math.ceil(count.intValue() * rating)));
 				
 				context.write(new ImmutableBytesWritable(rowkey), put);
     		} catch(Exception e) {
-    			ReduceLOGGER.error("Error in counting photos information _id:" + keys[1], e);
+    			ReduceLOGGER.error("Error in counting photos information", e);
     			context.getCounter(PhotosCounters.REDUCE_FAILED).increment(1);
     		}
 		}
@@ -589,28 +649,36 @@ public class StatsUserRating {
 		try {
 			System.out.println("Exporting into /root/Statistics/UsersRatingAnalytics/stats.csv");
 			
+			int positive_total_counter = 0, positive_paid_counter = 0, negative_counter = 0, zero_counter = 0;
+			final int MAX_ROWS = 50000;
+			
 			Configuration conf = HBaseConfiguration.create();
 			HTable userrating = new HTable(conf, "userrating");
 						
-			FileWriter writerarr[] = {
-					new FileWriter("/root/Statistics/UsersRatingAnalytics/stats_positive.csv"),
-					new FileWriter("/root/Statistics/UsersRatingAnalytics/stats_zero.csv"),
-					new FileWriter("/root/Statistics/UsersRatingAnalytics/stats_negative.csv")
-			};
+			Map<String, FileWriter> writers = new HashMap<String, FileWriter>();
+			writers.put("positive_paid_apps", new FileWriter("/root/Statistics/UsersRatingAnalytics/stats_positive_paid_app_" + positive_paid_counter/MAX_ROWS + ".csv"));
+			writers.put("positive_total_apps", new FileWriter("/root/Statistics/UsersRatingAnalytics/stats_positive_total_app_" + positive_total_counter/MAX_ROWS +".csv"));
+			writers.put("zero", new FileWriter("/root/Statistics/UsersRatingAnalytics/stats_zero_" + zero_counter/MAX_ROWS + ".csv"));
+			writers.put("negative", new FileWriter("/root/Statistics/UsersRatingAnalytics/stats_negative" + negative_counter/MAX_ROWS + ".csv"));
 			
-			for (int i = 0; i < writerarr.length; i++) {
-				writerarr[i].append("username");
-				writerarr[i].append(',');
-				writerarr[i].append("apps_count");
-				writerarr[i].append(',');
-				writerarr[i].append("followers_count");
-				writerarr[i].append(',');
-				writerarr[i].append("following_count");
-				writerarr[i].append(',');
-				writerarr[i].append("photos_count");
-				writerarr[i].append(',');
-				writerarr[i].append("rating");
-				writerarr[i].append('\n');
+		
+			for(FileWriter writer : writers.values()) {
+				writer.append("username");
+				writer.append(',');
+				writer.append("paid_apps_count");
+				writer.append(',');
+				writer.append("total_apps_count");
+				writer.append(',');
+				writer.append("followers_count");
+				writer.append(',');
+				writer.append("following_count");
+				writer.append(',');
+				writer.append("photos_count");
+				writer.append(',');
+				writer.append("registered");
+				writer.append(',');
+				writer.append("rating");
+				writer.append('\n');
 			}
 			
 			
@@ -621,8 +689,10 @@ public class StatsUserRating {
 			scan.addColumn(Bytes.toBytes("s"), Bytes.toBytes("followers_count"));
 			scan.addColumn(Bytes.toBytes("s"), Bytes.toBytes("following_count"));
 			scan.addColumn(Bytes.toBytes("s"), Bytes.toBytes("apps_count"));
+			scan.addColumn(Bytes.toBytes("s"), Bytes.toBytes("total_apps_count"));
 			scan.addColumn(Bytes.toBytes("s"), Bytes.toBytes("photos_count"));
 			scan.addColumn(Bytes.toBytes("s"), Bytes.toBytes("summary"));
+			scan.addColumn(Bytes.toBytes("s"), Bytes.toBytes("created"));
 			
 			ResultScanner scanner = userrating.getScanner(scan);
 			int count = 0;
@@ -632,12 +702,40 @@ public class StatsUserRating {
 				if(result.containsColumn(Bytes.toBytes("s"), Bytes.toBytes("summary")))
 					summary = Bytes.toInt(result.getValue(Bytes.toBytes("s"), Bytes.toBytes("summary")));
 				
-				if(summary > 0) 
-					writer = writerarr[0];
-				else if(summary == 0)
-					writer = writerarr[1];
-				else 
-					writer = writerarr[2];
+				
+				boolean has_paid = false;
+				if(result.containsColumn(Bytes.toBytes("s"), Bytes.toBytes("apps_count")))
+					has_paid = Bytes.toInt(result.getValue(Bytes.toBytes("s"), Bytes.toBytes("apps_count"))) > 0 ? true : false;
+				
+				boolean has_app = false;
+				if(result.containsColumn(Bytes.toBytes("s"), Bytes.toBytes("total_apps_count")))
+					has_app = Bytes.toInt(result.getValue(Bytes.toBytes("s"), Bytes.toBytes("total_apps_count"))) > 0 ? true : false;
+							
+				
+				if(summary > 0)
+					if(has_paid) {
+						if(++positive_paid_counter%MAX_ROWS == 0)
+							writers.put("positive_paid_apps", new FileWriter("/root/Statistics/UsersRatingAnalytics/stats_positive_paid_app_" + positive_paid_counter/MAX_ROWS + ".csv"));
+						writer = writers.get("positive_paid_apps");
+						
+					}
+					else if(has_app) {
+						if(++positive_total_counter%MAX_ROWS==0)
+							writers.put("positive_total_apps", new FileWriter("/root/Statistics/UsersRatingAnalytics/stats_positive_total_app_" + positive_total_counter/MAX_ROWS +".csv"));
+						writer = writers.get("positive_total_apps");
+					}
+					else
+						continue;
+				else if(summary == 0) {
+					if(++zero_counter%MAX_ROWS==0)
+						writers.put("zero", new FileWriter("/root/Statistics/UsersRatingAnalytics/stats_zero_" + zero_counter/MAX_ROWS + ".csv"));					
+					writer = writers.get("zero");
+				}
+				else {
+					if(++negative_counter%MAX_ROWS==0)
+						writers.put("negative", new FileWriter("/root/Statistics/UsersRatingAnalytics/stats_negative" + negative_counter/MAX_ROWS + ".csv"));
+					writer = writers.get("negative");
+				}
 					
 				
 				if(result.containsColumn(Bytes.toBytes("s"), Bytes.toBytes("username")))
@@ -648,6 +746,12 @@ public class StatsUserRating {
 				
 				if(result.containsColumn(Bytes.toBytes("s"), Bytes.toBytes("apps_count")))
 					writer.append(String.valueOf(Bytes.toInt(result.getValue(Bytes.toBytes("s"), Bytes.toBytes("apps_count")))));
+				else 
+					writer.append('0');
+				writer.append(',');
+				
+				if(result.containsColumn(Bytes.toBytes("s"), Bytes.toBytes("total_apps_count")))
+					writer.append(String.valueOf(Bytes.toInt(result.getValue(Bytes.toBytes("s"), Bytes.toBytes("total_apps_count")))));
 				else 
 					writer.append('0');
 				writer.append(',');
@@ -669,19 +773,27 @@ public class StatsUserRating {
 				else 
 					writer.append('0');
 				writer.append(',');					
-					
+				
+				if(result.containsColumn(Bytes.toBytes("s"), Bytes.toBytes("created")))
+					writer.append(String.valueOf(Bytes.toInt(result.getValue(Bytes.toBytes("s"), Bytes.toBytes("created")))));
+				else 
+					writer.append(' ');
+				writer.append(',');	
+				
 				writer.append(String.valueOf(summary));				
 				
 				writer.append('\n');
 				count++;
 				if(count%2000==0)
 					System.out.println("Rows inserted : "+count);
+				
+				
 			}
 			System.out.println("Rows inserted : " + count);
 			
-			for (int i = 0; i < writerarr.length; i++) {
-				writerarr[i].flush();
-				writerarr[i].close();
+			for (FileWriter writer1 : writers.values()) {
+				writer1.flush();
+				writer1.close();
 			}
 			userrating.close();
 			
